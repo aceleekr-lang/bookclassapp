@@ -96,6 +96,17 @@ input[type=color] { height: 44px; width: 80px; border: 2px solid var(--line); bo
 .login-t { font: 700 1.9rem/1.3 var(--serif); margin: 0 0 .3rem; }
 .login-sub { color: var(--sub); margin: 0 0 1.4rem; }
 .login-form { display: grid; gap: .9rem; margin-bottom: 1rem; }
+.first { display: grid; gap: .4rem; margin: .2rem 0 1rem; color: var(--sub); text-align: center; }
+.err.pending { color: var(--town); background: #E0F1EA; border-radius: 10px; padding: .6rem .8rem; font-weight: 600; }
+.signup { max-width: 520px; }
+.signup .c-box { margin: 0; }
+.signup .c-box h2 { font-size: 1rem; }
+.signup .trk { min-height: 0; }
+.pending-box { background: #FFF6E3; border: 2px solid var(--big); border-radius: 14px; padding: .8rem 1rem; margin-bottom: 1rem; }
+.pending-box .h2 { margin: 0 0 .3rem; }
+.pending { list-style: none; margin: .5rem 0 0; padding: 0; display: grid; gap: .4rem; }
+.pending li { display: flex; gap: .6rem .9rem; align-items: center; flex-wrap: wrap; background: var(--card); border-radius: 10px; padding: .5rem .8rem; }
+.pending li > .row { margin-left: auto; }
 .check.shared { font-weight: 600; align-items: flex-start; }
 .check.shared small { display: block; font-weight: 400; color: var(--sub); font-size: .82rem; }
 .shared-b { border-color: var(--main); color: var(--main); }

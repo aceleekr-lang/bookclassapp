@@ -25,8 +25,10 @@
     version: '1',
     photo: '수업 사진(회차 사진)은 같은 과정 참여자 모두가 볼 수 있고, 과정 구분 없이 올린 "전체 공용" 사진은 모든 과정 참여자가 볼 수 있어요. 앱에 올린 사진은 주소(링크)를 아는 사람이면 로그인 없이도 볼 수 있는 방식으로 저장돼요. 내가 나온 사진을 내리고 싶으면 언제든 선생님께 말씀해 주세요.',
     ai: '"AI 교정 받기"를 누르면 그 쪽의 글이 맞춤법과 문장을 고치기 위해 미국 회사 Anthropic의 AI(Claude) 서버로 보내져요. 동의하지 않아도 글쓰기와 책 만들기는 모두 할 수 있고, AI 교정만 쓸 수 없어요. 나중에 오른쪽 위 내 이름을 눌러 바꿀 수 있어요.',
+    privacy: '가입할 때 적는 이름과 휴대폰 번호는 수업 참여자 확인과 책 만들기 연락(수정 요청, 완성된 책 전달)에만 쓰고, 운영자(가곡재생팀)만 볼 수 있어요. 책 제작이 끝나면 지워요. 동의하지 않으면 가입할 수 없어요.',
     guardian: '어린이는 보호자와 함께 읽고 체크해 주세요.'
   }, C.consent || {});
+  const fmtPhone = p => { const d = String(p || '').replace(/\D/g, ''); return d.length === 11 ? `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}` : d.length === 10 ? `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}` : d; };
   const needConsent = () => S.me && S.me.role === 'member' && !(S.me.consent && S.me.consent.ver === CONSENT.version);
   const aiOk = () => !S.me || S.me.role !== 'member' || !!(S.me.consent && S.me.consent.ai);
   const enter = () => { startIdle(); return needConsent() ? consentView() : shell(); };
@@ -218,22 +220,67 @@
       <p class="login-sub">수업에서 쓴 이야기를 마무리해서, 한 권의 책에 싣는 곳이에요.</p>
       <form id="lf" class="login-form">
         <label class="f">이름<input id="lname" autocomplete="username" required></label>
-        <label class="f">PIN 네 자리<input id="lpin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="current-password" required></label>
+        <label class="f">비밀번호<input id="lpin" type="password" autocomplete="current-password" required></label>
         <label class="check shared"><input type="checkbox" id="lshared"> 여러 사람이 같이 쓰는 기기예요 <small>창을 닫거나 ${IDLE_MIN}분 동안 안 쓰면 자동으로 로그아웃돼요</small></label>
         <button class="btn btn-main btn-wide" type="submit">들어가기</button>
         <p class="err" id="lerr" role="alert"></p>
       </form>
-      <p class="muted">PIN을 잊었으면 선생님께 말씀해 주세요.</p></div>`;
+      <p class="first">처음이세요? <button class="btn btn-wide" id="goSignup" type="button">가입하기</button></p>
+      <p class="muted">비밀번호를 잊었으면 선생님께 말씀해 주세요. 새로 정해 드려요.</p></div>`;
+    $('#goSignup').onclick = signupView;
     $('#lf').onsubmit = async e => {
       e.preventDefault();
       const btn = $('#lf button'); btn.disabled = true; $('#lerr').textContent = '';
       try {
         const shared = $('#lshared').checked;
         const r = await rpc('bk_login', { p_name: $('#lname').value, p_pin: $('#lpin').value, p_shared: shared });
+        if (r.pending) { $('#lerr').className = 'err pending'; $('#lerr').textContent = r.error; btn.disabled = false; return; }
         if (r.error) throw new Error(r.error);
         S.token = r.token; S.me = r.me; TOK.set(r.token, shared);
         S.tab = ''; enter();
       } catch (err) { $('#lerr').textContent = err.message; btn.disabled = false; }
+    };
+  }
+
+  // ---------- 가입 ----------
+  function signupView() {
+    app.innerHTML = `<div class="login signup">
+      <h1 class="login-t">가입하기</h1>
+      <p class="login-sub">수업에 참여한 분만 가입해요. 신청하면 선생님이 확인하고 승인한 뒤에 들어올 수 있어요.</p>
+      ${CONSENT.guardian ? `<p class="guardian">${esc(CONSENT.guardian)}</p>` : ''}
+      <form id="sf" class="login-form">
+        <label class="f">이름 <small>책에 실릴 이름은 나중에 따로 정할 수 있어요</small><input id="sName" autocomplete="name" maxlength="20" required></label>
+        <label class="f">휴대폰 번호<input id="sPhone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="01012345678" required></label>
+        <label class="f">비밀번호 <small>4자 이상, 기억하기 쉬운 걸로</small><input id="sPw" type="password" autocomplete="new-password" minlength="4" maxlength="40" required></label>
+        <label class="f">비밀번호 한 번 더<input id="sPw2" type="password" autocomplete="new-password" required></label>
+        <div class="f"><span>참여한 과정 <small>여러 개 들었으면 모두 체크</small></span>${trackChecks('s_tr')}</div>
+        <section class="c-box"><h2>개인정보 수집·이용</h2><p>${esc(CONSENT.privacy)}</p>
+          <label class="check"><input type="checkbox" id="sPriv" required> 동의해요 <small>(필수)</small></label></section>
+        <section class="c-box"><h2>사진에 대해</h2><p>${esc(CONSENT.photo)}</p>
+          <label class="check"><input type="checkbox" id="sPhoto" required> 읽고 확인했어요 <small>(필수)</small></label></section>
+        <section class="c-box"><h2>AI 교정에 대해</h2><p>${esc(CONSENT.ai)}</p>
+          <label class="check"><input type="checkbox" id="sAi"> AI 교정을 쓰는 데 동의해요 <small>(선택)</small></label></section>
+        <button class="btn btn-main btn-wide" type="submit">가입 신청하기</button>
+        <p class="err" id="serr" role="alert"></p>
+      </form>
+      <p class="muted center"><button class="linkbtn" id="backLogin" type="button">이미 가입했어요 — 로그인으로</button></p></div>`;
+    $('#backLogin').onclick = loginView;
+    $('#sf').onsubmit = async e => {
+      e.preventDefault();
+      const btn = $('#sf button[type=submit]'); $('#serr').textContent = '';
+      if ($('#sPw').value !== $('#sPw2').value) { $('#serr').textContent = '비밀번호 두 칸이 서로 달라요.'; return; }
+      const tracks = checked(document, 's_tr');
+      if (!tracks.length) { $('#serr').textContent = '참여한 과정을 하나 이상 골라 주세요.'; return; }
+      btn.disabled = true;
+      try {
+        const r = await rpc('bk_signup', { p: { name: $('#sName').value, phone: $('#sPhone').value, pw: $('#sPw').value, tracks,
+          consent: { ver: CONSENT.version, privacy: $('#sPriv').checked, ai: $('#sAi').checked } } });
+        if (r.error) throw new Error(r.error);
+        app.innerHTML = `<div class="login"><h1 class="login-t">가입 신청이 들어왔어요</h1>
+          <p class="login-sub">${esc($('#sName').value.trim())}님, 선생님이 확인하고 승인하면 <b>이름과 비밀번호</b>로 들어올 수 있어요. 승인은 보통 하루 안에 돼요. 급하면 선생님께 말씀해 주세요.</p>
+          <button class="btn btn-main btn-wide" id="toLogin">로그인 화면으로</button></div>`;
+        $('#toLogin').onclick = loginView;
+      } catch (err) { $('#serr').textContent = err.message; btn.disabled = false; }
     };
   }
 
@@ -317,23 +364,23 @@
     const member = S.me.role === 'member';
     const d = modal(`<h2>${esc(S.me.name)}님</h2><p class="muted">${ROLE[S.me.role]}</p>
       ${member ? `<p class="ai-state">AI 교정 동의: <b>${aiOk() ? '동의함' : '동의 안 함'}</b></p>` : ''}
-      <div class="stack">${member ? `<button class="btn" id="mAi">${aiOk() ? 'AI 교정 동의 거둬들이기' : 'AI 교정에 동의하기'}</button>` : ''}<button class="btn" id="mPin">PIN 바꾸기</button><button class="btn" id="mOut">로그아웃</button><button class="btn btn-ghost" data-close>닫기</button></div>`);
+      <div class="stack">${member ? `<button class="btn" id="mAi">${aiOk() ? 'AI 교정 동의 거둬들이기' : 'AI 교정에 동의하기'}</button>` : ''}<button class="btn" id="mPin">비밀번호 바꾸기</button><button class="btn" id="mOut">로그아웃</button><button class="btn btn-ghost" data-close>닫기</button></div>`);
     $('#mOut', d).onclick = async () => { if (S.flush) { try { await S.flush(); } catch { /* 무시 */ } } try { await api('logout'); } catch { /* 무시 */ } d.close(); signOutLocal(); };
     $('#mPin', d).onclick = () => { d.close(); pinDialog(); };
     const ai = $('#mAi', d);
     if (ai) ai.onclick = async () => { d.close(); if (aiOk()) { if (await ask('AI 교정 동의를 거둬들일까요?', '거둬들이면 AI 교정을 쓸 수 없어요. 이미 고친 글은 그대로예요.', '거둬들이기')) { try { await setAi(false); } catch (err) { toast(err.message, true); } } } else await askAi(); };
   }
   function pinDialog() {
-    const d = modal(`<h2>PIN 바꾸기</h2><form id="pf" class="stack">
-      <label class="f">지금 PIN<input id="p0" type="password" inputmode="numeric" maxlength="4" required></label>
-      <label class="f">새 PIN (숫자 4자리)<input id="p1" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" required></label>
-      <label class="f">새 PIN 한 번 더<input id="p2" type="password" inputmode="numeric" maxlength="4" required></label>
+    const d = modal(`<h2>비밀번호 바꾸기</h2><form id="pf" class="stack">
+      <label class="f">지금 비밀번호<input id="p0" type="password" autocomplete="current-password" required></label>
+      <label class="f">새 비밀번호 (4자 이상)<input id="p1" type="password" autocomplete="new-password" minlength="4" maxlength="40" required></label>
+      <label class="f">새 비밀번호 한 번 더<input id="p2" type="password" autocomplete="new-password" required></label>
       <p class="err" id="perr" role="alert"></p>
-      <div class="row end"><button type="button" class="btn btn-ghost" data-close>취소</button><button class="btn btn-main">PIN 바꾸기</button></div></form>`);
+      <div class="row end"><button type="button" class="btn btn-ghost" data-close>취소</button><button class="btn btn-main">비밀번호 바꾸기</button></div></form>`);
     $('#pf', d).onsubmit = async e => {
       e.preventDefault();
-      if ($('#p1', d).value !== $('#p2', d).value) { $('#perr', d).textContent = '새 PIN 두 칸이 서로 달라요.'; return; }
-      try { await api('pin_change', { old: $('#p0', d).value, new: $('#p1', d).value }); d.close(); toast('PIN을 바꿨어요.'); }
+      if ($('#p1', d).value !== $('#p2', d).value) { $('#perr', d).textContent = '새 비밀번호 두 칸이 서로 달라요.'; return; }
+      try { await api('pin_change', { old: $('#p0', d).value, new: $('#p1', d).value }); d.close(); toast('비밀번호를 바꿨어요.'); }
       catch (err) { $('#perr', d).textContent = err.message; }
     };
   }
@@ -1150,28 +1197,34 @@
 
   VIEWS.people = async v => {
     const { people } = await api('people');
+    const pending = people.filter(p => !p.approved);
     v.innerHTML = `<h1 class="h">참여자</h1>
-      <p class="lead">이름과 PIN 네 자리로 들어와요. 참여한 과정을 체크해야 그 과정의 책을 쓸 수 있어요. 두 과정에 참여했다면 둘 다 체크하세요.</p>
+      ${pending.length ? `<section class="pending-box"><h2 class="h2">승인 기다리는 중 <span class="chip chip-wait">${pending.length}명</span></h2>
+        <p class="muted">수업에 참여한 분이 맞는지 이름과 전화번호로 확인한 뒤 승인해 주세요. 모르는 사람이면 거절(삭제)하세요.</p>
+        <ul class="pending">${pending.map(p => `<li><b>${esc(p.name)}</b> <span>${esc(fmtPhone(p.phone))}</span> <span>${(p.tracks || []).map(t => `<span class="chip c-${t}">${CUR[t] ? CUR[t].name : t}</span>`).join(' ')}</span>
+          <small class="muted">${fmtTime(p.created_at)} 신청${p.consent && p.consent.ai ? ' · AI 동의' : ''}</small>
+          <span class="row"><button class="btn btn-small btn-main" data-approve="${p.id}">승인</button><button class="btn btn-small btn-ghost btn-danger" data-reject="${p.id}">거절</button></span></li>`).join('')}</ul></section>` : ''}
+      <p class="lead">참여자는 가입 화면에서 직접 가입하고(이름·휴대폰·비밀번호·과정), 운영자가 승인하면 이름과 비밀번호로 들어와요. 두 과정 이상 참여한 분은 과정마다 따로 써요. 비밀번호를 잊은 분은 "고치기"에서 새로 정해 주세요.</p>
       <div class="backup"><button class="btn btn-small" id="backup">전체 백업 내려받기</button><span class="muted">참여자·작품·책 정보·사진 목록을 파일 하나(JSON)로 저장해요. 사진 파일 자체는 저장소에 그대로 있어요.</span></div>
       <details class="bulk" ${people.length < 3 ? 'open' : ''}><summary>여러 명 한꺼번에 등록하기</summary>
         <form id="bulk" class="stack">
           <label class="f">이름 (한 줄에 한 명)<textarea id="b_names" rows="6" placeholder="김하람&#10;박경순&#10;이서우"></textarea></label>
           <div class="f"><span>참여한 과정</span>${trackChecks('b_tr')}</div>
-          <div class="row end"><button class="btn btn-main">등록하고 PIN 받기</button></div>
+          <div class="row end"><button class="btn btn-main">등록하고 비밀번호 받기</button></div>
         </form></details>
       <form class="addp" id="af">
         <label class="f">이름<input id="a_name" required></label>
         <label class="f">역할<select id="a_role"><option value="member">참여자</option><option value="teacher">강사</option><option value="admin">운영자</option></select></label>
-        <label class="f">PIN<input id="a_pin" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" required></label>
+        <label class="f">비밀번호<input id="a_pin" minlength="4" maxlength="40" required></label>
         <div class="f"><span>과정</span>${trackChecks('a_tr')}</div>
         <button class="btn btn-main">등록</button>
       </form>
-      <div class="tbl-wrap"><table class="plist"><thead><tr><th>이름</th><th>역할</th><th>과정</th><th>안내·동의</th><th>상태</th><th></th></tr></thead>
-      <tbody>${people.map(p => `<tr class="${p.active ? '' : 'off'}"><td>${esc(p.name)}</td><td>${ROLE[p.role]}</td>
+      <div class="tbl-wrap"><table class="plist"><thead><tr><th>이름</th><th>휴대폰</th><th>역할</th><th>과정</th><th>안내·동의</th><th>상태</th><th></th></tr></thead>
+      <tbody>${people.filter(p => p.approved).map(p => `<tr class="${p.active ? '' : 'off'}"><td>${esc(p.name)}</td><td>${esc(fmtPhone(p.phone))}</td><td>${ROLE[p.role]}</td>
         <td>${(p.tracks || []).map(t => `<span class="chip c-${t}">${CUR[t] ? CUR[t].name : t}</span>`).join(' ')}</td>
         <td>${p.role !== 'member' ? '<span class="muted">해당 없음</span>' : !p.consent ? '<span class="chip chip-wait">아직</span>'
           : `<span class="chip ${p.consent.ver === CONSENT.version ? 'chip-ok' : 'chip-wait'}">${p.consent.ver === CONSENT.version ? '확인' : '다시 받아야 함'}</span> AI ${p.consent.ai ? '동의' : '안 함'} <small class="muted">${fmtTime(p.consent.at)}</small>`}</td>
-        <td>${!p.active ? '사용 중지' : p.locked ? '잠김 (PIN 5번 틀림)' : '사용 중'}</td>
+        <td>${!p.active ? '사용 중지' : p.locked ? '잠김 (비밀번호 5번 틀림)' : '사용 중'}</td>
         <td><button class="btn btn-small" data-edit="${p.id}">고치기</button></td></tr>`).join('')}</tbody></table></div>`;
     $('#a_pin', v).value = randPin();
     $('#backup', v).onclick = async e => {
@@ -1190,7 +1243,7 @@
     $('#af', v).onsubmit = async e => {
       e.preventDefault();
       const name = $('#a_name', v).value.trim(), pin = $('#a_pin', v).value;
-      try { await api('person_save', { name, role: $('#a_role', v).value, pin, tracks: checked(v, 'a_tr') }); toast(`${name}님을 등록했어요. PIN ${pin}를 알려 주세요.`); go('people'); }
+      try { await api('person_save', { name, role: $('#a_role', v).value, pin, tracks: checked(v, 'a_tr') }); toast(`${name}님을 등록했어요. 비밀번호 ${pin}를 알려 주세요.`); go('people'); }
       catch (err) { toast(err.message, true); }
     };
     $('#bulk', v).onsubmit = async e => {
@@ -1205,27 +1258,33 @@
         try { await api('person_save', { name, pin, role: 'member', tracks }); out.push([name, pin, '']); }
         catch (err) { out.push([name, '', err.message]); }
       }
-      const d = modal(`<h2>등록 결과</h2><p class="muted">이 창을 닫으면 PIN을 다시 볼 수 없어요. 인쇄하거나 옮겨 적어 두세요.</p>
-        <div class="tbl-wrap"><table class="pins"><thead><tr><th>이름</th><th>PIN</th></tr></thead><tbody>${out.map(([n, p, er]) => `<tr><td>${esc(n)}</td><td>${p ? `<b>${p}</b>` : `<span class="err">${esc(er)}</span>`}</td></tr>`).join('')}</tbody></table></div>
+      const d = modal(`<h2>등록 결과</h2><p class="muted">이 창을 닫으면 비밀번호를 다시 볼 수 없어요. 인쇄하거나 옮겨 적어 두세요.</p>
+        <div class="tbl-wrap"><table class="pins"><thead><tr><th>이름</th><th>비밀번호</th></tr></thead><tbody>${out.map(([n, p, er]) => `<tr><td>${esc(n)}</td><td>${p ? `<b>${p}</b>` : `<span class="err">${esc(er)}</span>`}</td></tr>`).join('')}</tbody></table></div>
         <div class="row end"><button class="btn" id="pinCopy">글자로 복사</button><button class="btn btn-main" data-close>닫기</button></div>`);
       $('#pinCopy', d).onclick = async () => { try { await navigator.clipboard.writeText(out.filter(x => x[1]).map(x => `${x[0]}\t${x[1]}`).join('\n')); toast('복사했어요.'); } catch { toast('복사하지 못했어요. 표를 직접 옮겨 적어 주세요.', true); } };
       d.addEventListener('close', () => go('people'));
     };
-    v.onclick = e => {
+    v.onclick = async e => {
+      const ap = e.target.closest('[data-approve]');
+      if (ap) { try { await api('person_approve', { id: ap.dataset.approve, ok: true }); toast('승인했어요. 이제 로그인할 수 있어요.'); go('people'); } catch (err) { toast(err.message, true); } return; }
+      const rj = e.target.closest('[data-reject]');
+      if (rj) { const p = people.find(x => x.id === rj.dataset.reject); if (!(await ask(`${p.name}님의 가입 신청을 거절할까요?`, '신청 정보가 지워져요. 다시 가입 신청할 수는 있어요.', '거절'))) return;
+        try { await api('person_approve', { id: rj.dataset.reject, ok: false }); go('people'); } catch (err) { toast(err.message, true); } return; }
       const b = e.target.closest('[data-edit]'); if (!b) return;
       const p = people.find(x => x.id === b.dataset.edit);
       const d = modal(`<h2>${esc(p.name)}님 정보 고치기</h2><form id="ef" class="stack">
         <label class="f">이름<input id="e_name" value="${esc(p.name)}"></label>
+        <label class="f">휴대폰 번호<input id="e_phone" type="tel" inputmode="numeric" value="${esc(p.phone || '')}" placeholder="01012345678"></label>
         <label class="f">역할<select id="e_role">${Object.entries(ROLE).map(([k, l]) => `<option value="${k}" ${p.role === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
         <div class="f"><span>참여한 과정</span>${trackChecks('e_tr', p.tracks || [])}</div>
-        <label class="f">새 PIN (바꿀 때만)<input id="e_pin" inputmode="numeric" maxlength="4" pattern="[0-9]{4}"></label>
+        <label class="f">새 비밀번호 (잊어버렸을 때만, 4자 이상)<input id="e_pin" minlength="4" maxlength="40"></label>
         <label class="check"><input type="checkbox" id="e_act" ${p.active ? 'checked' : ''}> 사용 중 (끄면 로그인할 수 없어요)</label>
-        <p class="muted">저장하면 PIN 잠김도 함께 풀려요.</p>
+        <p class="muted">저장하면 비밀번호 잠김도 함께 풀려요.</p>
         <div class="row end"><button type="button" class="btn btn-ghost" data-close>취소</button><button class="btn btn-main">저장</button></div></form>`);
       $('#ef', d).onsubmit = async ev => {
         ev.preventDefault();
         try {
-          await api('person_save', { id: p.id, name: $('#e_name', d).value, role: $('#e_role', d).value, tracks: checked(d, 'e_tr'), pin: $('#e_pin', d).value, active: $('#e_act', d).checked });
+          await api('person_save', { id: p.id, name: $('#e_name', d).value, phone: $('#e_phone', d).value, role: $('#e_role', d).value, tracks: checked(d, 'e_tr'), pin: $('#e_pin', d).value, active: $('#e_act', d).checked });
           d.close(); toast('저장했어요.'); go('people');
         } catch (err) { toast(err.message, true); }
       };
