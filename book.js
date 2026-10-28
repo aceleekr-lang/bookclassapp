@@ -1,4 +1,4 @@
-/* 신국판(152×225mm) 조판 — 쪽 틀 14가지, 트랙별 합본, 브라우저 인쇄로 PDF 저장 */
+/* 신국판(152×225mm) 조판 — 쪽 틀 15가지, 트랙별 합본, 브라우저 인쇄로 PDF 저장 */
 (() => {
   'use strict';
   const W = 152, H = 225;
@@ -15,8 +15,9 @@
     { id: 'twoSide',   name: '그림 둘 나란히 + 글',   fr: [[56, 72], [56, 72]],                 text: 'prose', head: '소제목 (없어도 돼요)' },
     { id: 'two',       name: '그림 둘 위아래',        fr: [[116, 80], [116, 80]],               text: 'cap' },
     { id: 'grid4',     name: '사진 넷 모음',          fr: [[56, 74], [56, 74], [56, 74], [56, 74]], text: 'cap' },
-    { id: 'full',      name: '그림 가득',            fr: [[W, H]],                             text: 'cap', bleed: true },
-    { id: 'fullText',  name: '그림 가득 + 글 상자',   fr: [[W, H]],                             text: 'box', head: '소제목 (없어도 돼요)', bleed: true },
+    { id: 'full',      name: '쪽 끝까지 가득 (가장자리 잘림)', fr: [[W, H]],                       text: 'cap', bleed: true, desc: '사진이 쪽 가장자리까지 꽉 차요. 재단하면서 테두리 3mm쯤이 잘려 나가니, 중요한 부분이 가장자리에 있는 사진은 피해 주세요.' },
+    { id: 'fullSafe',  name: '안전영역 안에 가득 (안 잘림)', fr: [[W - 2 * 10, H - 2 * 10]],      text: 'cap', safe: true, desc: '사진이 안전영역(가장자리 10mm 안쪽)에 꽉 차요. 사진은 하나도 잘리지 않고, 둘레에 흰 여백이 남아요.' },
+    { id: 'fullText',  name: '쪽 끝까지 가득 + 글 상자',     fr: [[W, H]],                       text: 'box', head: '소제목 (없어도 돼요)', bleed: true, desc: '쪽 끝까지 사진을 채우고 아래에 글 상자를 얹어요. 가장자리 3mm쯤은 재단으로 잘려요.' },
     { id: 'poem',      name: '시',                  fr: [[50, 40]],                           text: 'poem',  head: '시 제목', optional: true },
     { id: 'diary',     name: '그림일기',             fr: [[116, 82]],                          text: 'diary', head: '날짜와 날씨' },
     { id: 'quote',     name: '한마디',              fr: [],                                   text: 'quote', head: '누가 한 말 (없어도 돼요)' },
@@ -99,6 +100,7 @@
       case 'two': return `<div class="ct col">${f(0)}${f(1)}${flow('cap', pg.text)}</div>`;
       case 'grid4': return `<div class="ct col"><div class="grid4">${f(0)}${f(1)}${f(2)}${f(3)}</div>${flow('cap', pg.text)}</div>`;
       case 'full': return `<div class="full">${frame(im[0], t.fr[0], '', lite)}</div>${String(pg.text || '').trim() ? `<div class="fcap">${flow('cap', pg.text)}</div>` : ''}`;
+      case 'fullSafe': return `<div class="fullsafe">${frame(im[0], t.fr[0], '', lite)}</div>${String(pg.text || '').trim() ? `<div class="fcap fcap-safe">${flow('cap', pg.text)}</div>` : ''}`;
       case 'fullText': return `<div class="full">${frame(im[0], t.fr[0], '', lite)}</div><div class="fbox">${sub}${flow('prose', pg.text, pg)}</div>`;
       case 'poem': return `<div class="ct col poem">${h ? `<h3 class="poem-t">${esc(h)}</h3>` : ''}${flow('poem', pg.text)}${im[0] && im[0].url ? f(0) : ''}</div>`;
       case 'diary': return `<div class="ct col diary"><div class="d-head">${esc(h) || '<span class="ph">○월 ○일 ○요일 · 날씨</span>'}</div>${f(0)}${flow('diary', pg.text)}</div>`;
@@ -196,8 +198,7 @@
       list.push({ special: 'colo', folio: false, html: `<div class="colo">
           <p class="colo-t">${esc(st.title)}</p>
           <dl>${st.date ? `<dt>펴낸 날</dt><dd>${esc(st.date)}</dd>` : ''}${st.publisher ? `<dt>펴낸 곳</dt><dd>${esc(st.publisher)}</dd>` : ''}${st.isbn ? `<dt>ISBN</dt><dd>${esc(st.isbn)}</dd>` : ''}</dl>
-          ${st.ai_notice ? `<p>${esc(st.ai_notice)}</p>` : ''}
-          <p>이 책에 실린 글과 그림의 저작권은 각 저자에게 있습니다. 저자의 허락 없이 옮겨 쓸 수 없습니다.</p><p>비매품</p></div>` });
+          <p>이 책에 실린 글과 그림의 저작권은 각 저자에게 있습니다. 저자의 허락 없이 옮겨 쓸 수 없습니다.</p></div>` });
     }
     const toc = list.find(x => x.special === 'toc');
     if (toc) toc.html = `<div class="ct"><h2 class="bk-h">차례</h2><ol class="toc ${works.length > 16 ? 'dense' : ''}">${works.map(w =>
@@ -315,7 +316,7 @@
         });
         if (!single && !st.bleed) {
           const nFull = works.reduce((a, w) => a + (w.pages || []).filter(pg => tpl(pg.tpl).bleed).length, 0);
-          if (nFull) warn.unshift(['warn', `"그림 가득" 쪽이 ${nFull}쪽 있어요. 인쇄소에 넘길 PDF는 "도련 3mm 넣기"를 켜고 저장해야 재단할 때 흰 테두리가 생기지 않아요.`]);
+          if (nFull) warn.unshift(['warn', `"쪽 끝까지 가득" 쪽이 ${nFull}쪽 있어요. 인쇄소에 넘길 PDF는 "도련 3mm 넣기"를 켜고 저장해야 재단할 때 흰 테두리가 생기지 않아요.`]);
         }
         return warn;
       } });

@@ -414,7 +414,7 @@
       imgTop: I(4, 4, 22, 16) + L(24, 38), imgBottom: L(4, 18) + I(4, 24, 22, 16), imgSmall: I(9, 4, 12, 10) + L(18, 38),
       twoSide: I(4, 4, 10.5, 14) + I(15.5, 4, 10.5, 14) + L(22, 38), two: I(4, 3, 22, 17) + I(4, 21.5, 22, 17) + L(40, 40, 8, 14),
       grid4: I(4, 4, 10.5, 15) + I(15.5, 4, 10.5, 15) + I(4, 20.5, 10.5, 15) + I(15.5, 20.5, 10.5, 15) + L(39, 39, 8, 14),
-      full: I(0, 0, 30, 44), fullText: I(0, 0, 30, 44) + '<rect x="3.5" y="27" width="23" height="13" rx="1" class="b"/>' + L(30, 37, 6, 18, true),
+      full: I(0, 0, 30, 44), fullSafe: I(2.5, 2.5, 25, 39), fullText: I(0, 0, 30, 44) + '<rect x="3.5" y="27" width="23" height="13" rx="1" class="b"/>' + L(30, 37, 6, 18, true),
       poem: [8, 11.4, 14.8, 21.6, 25, 28.4].map((y, i) => `<rect x="${9 + (i % 3)}" y="${y}" width="${[12, 9, 11, 10, 12, 7][i]}" height="1.5" rx=".7" class="l"/>`).join(''),
       diary: '<rect x="4" y="5" width="22" height="15" rx="1" class="i o"/>' + [25, 29.5, 34, 38.5].map(y => `<rect x="4" y="${y}" width="22" height=".6" class="l"/>`).join(''),
       quote: '<text x="6" y="17" class="q">“</text>' + L(19, 26, 7, 16),
@@ -735,7 +735,8 @@
           <div class="row"><button class="icon-btn" data-act="up" ${sel === 0 ? 'disabled' : ''} aria-label="앞으로 옮기기">◀</button><button class="icon-btn" data-act="down" ${sel === W.pages.length - 1 ? 'disabled' : ''} aria-label="뒤로 옮기기">▶</button>
           <button class="btn btn-small btn-ghost" data-act="dup">복사</button><button class="btn btn-small btn-ghost btn-danger" data-act="del">지우기</button></div></div></div>
         <div class="e-sec"><p class="f-l">쪽 틀</p>
-          <div class="tpls" role="radiogroup" aria-label="쪽 틀">${Book.TPL.map(x => `<button class="tplb ${x.id === t.id ? 'on' : ''}" role="radio" aria-checked="${x.id === t.id}" data-tpl="${x.id}">${tplIcon(x.id)}<span>${esc(x.name)}</span></button>`).join('')}</div></div>
+          <div class="tpls" role="radiogroup" aria-label="쪽 틀">${Book.TPL.map(x => `<button class="tplb ${x.id === t.id ? 'on' : ''}" role="radio" aria-checked="${x.id === t.id}" data-tpl="${x.id}">${tplIcon(x.id)}<span>${esc(x.name)}</span></button>`).join('')}</div>
+          ${t.desc ? `<p class="tpl-desc">${esc(t.desc)}</p>` : ''}</div>
         ${pg.hint ? `<div class="hintcard"><small>수업 질문</small><p>${esc(pg.hint)}</p><button class="linkbtn" data-act="hintoff">질문 지우기</button></div>` : ''}
         ${t.head ? `<label class="f">${esc(t.head)}<input id="pHead" value="${esc(pg.head || '')}"></label>` : ''}
         <label class="f">${textLabel}<textarea id="pText" rows="${t.text === 'cap' ? 3 : 9}" class="${t.text === 'poem' ? 'poemta' : ''}" placeholder="${esc(pg.hint || '여기에 써요')}">${esc(pg.text || '')}</textarea></label>
@@ -1023,7 +1024,7 @@
     const track = arg.track || S.bookTrack || 'small';
     S.bookTrack = track;
     const res = await api('book', { track });
-    const st = Object.assign({ title: CUR[track].name, subtitle: '', publisher: '', date: '', isbn: '', greeting: '', credits: '', ai_notice: '', color: CUR[track].color, cover: null, bleed: false, back_text: '', right_start: true, paper_mm: '', spine_mm: '', flap_mm: '' }, res.settings);
+    const st = Object.assign({ title: CUR[track].name, subtitle: '', publisher: '', date: '', isbn: '', greeting: '', credits: '', color: CUR[track].color, cover: null, bleed: false, back_text: '', right_start: true, paper_mm: '', spine_mm: '', flap_mm: '' }, res.settings);
     if (st.pad == null) st.pad = st.pad4 === false ? '0' : '4';
     const works = res.works;
     const byId = Object.fromEntries(works.map(w => [w.person_id, w]));
@@ -1052,7 +1053,6 @@
           <label class="f">ISBN (없으면 비워 두기)<input data-k="isbn" value="${esc(st.isbn)}"></label>
           <label class="f">책을 펴내며 (인사말, 비우면 빠져요)<textarea data-k="greeting" rows="6">${esc(st.greeting)}</textarea></label>
           <label class="f">함께 만든 사람들 (강사, 기획, 운영 등 한 줄에 하나)<textarea data-k="credits" rows="4">${esc(st.credits)}</textarea></label>
-          <label class="f">AI 사용 표기<input data-k="ai_notice" value="${esc(st.ai_notice)}"></label>
           <label class="f inline">표지 색<input type="color" data-k="color" value="${esc(st.color)}"></label>
           <div class="f"><span>표지 그림</span>${st.cover && st.cover.url ? `<div class="row"><img class="cover-th" src="${esc(st.cover.url)}" alt=""><button type="button" class="btn btn-small" data-img="cover">바꾸기</button><button type="button" class="btn btn-small btn-ghost" data-imgdel="cover">빼기</button></div>` : '<button type="button" class="btn drop" data-img="cover">표지 그림 올리기</button>'}</div>
           <label class="f">뒤표지 글 (책 소개, 비우면 색만)<textarea data-k="back_text" rows="4">${esc(st.back_text)}</textarea></label>
@@ -1063,7 +1063,7 @@
           <div class="grid2"><label class="f">내지 종이 한 장 두께 mm <small>(모르면 비우기, 0.1로 계산)</small><input data-k="paper_mm" inputmode="decimal" value="${esc(st.paper_mm)}" placeholder="0.1"></label>
           <label class="f">인쇄소가 알려 준 책등 폭 mm <small>(있으면 이 값을 씀)</small><input data-k="spine_mm" inputmode="decimal" value="${esc(st.spine_mm)}" placeholder="자동 계산"></label></div>
           <label class="check"><input type="checkbox" data-k="right_start" ${st.right_start !== false ? 'checked' : ''}> 작가마다 첫 쪽을 오른쪽에서 시작 (빈 쪽이 생길 수 있어요)</label>
-          <label class="check"><input type="checkbox" data-k="bleed" ${st.bleed ? 'checked' : ''}> 내지에 도련 3mm 넣기 (그림 가득 쪽이 있으면 켜기. 표지는 항상 도련 포함)</label>
+          <label class="check"><input type="checkbox" data-k="bleed" ${st.bleed ? 'checked' : ''}> 내지에 도련 3mm 넣기 ("쪽 끝까지 가득" 쪽이 있으면 켜기. 표지는 항상 도련 포함)</label>
         </form>`;
       updSpine();
     };
