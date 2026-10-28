@@ -609,7 +609,14 @@
     const drawThumbs = () => { $('#thumbs', v).innerHTML = W.pages.map(thumb).join(''); };
     const redrawThumb = () => { const li = $$('#thumbs > li', v)[sel]; if (li) li.outerHTML = thumb(page(), sel); };
     let fitZ = 1;
-    const stageZoom = () => { const box = $('.stage', v); fitZ = Math.min(1, (box.clientWidth - 4) / PX); const s = $('#stage > .pg', v); if (s) s.style.zoom = fitZ; };
+    const stageZoom = () => {
+      const box = $('.stage', v); if (!box) return;
+      const avail = Math.min(box.clientWidth, document.documentElement.clientWidth - 32) - 4;
+      fitZ = Math.min(1, avail / PX);
+      const s = $('#stage > .pg', v); if (s) s.style.zoom = fitZ;
+      // zoom을 못 쓰는 브라우저(구형 사파리)는 transform으로
+      if (s && getComputedStyle(s).zoom === undefined) { s.style.transform = `scale(${fitZ})`; s.style.transformOrigin = 'top center'; $('#stage', v).style.height = (PX * 225 / 152 * fitZ) + 'px'; }
+    };
     let overT;
     const mmOf = (ev, trim) => { const r = trim.getBoundingClientRect(); return [(ev.clientX - r.left) / r.width * Book.W, (ev.clientY - r.top) / r.height * Book.H]; };
     const r1 = n => Math.round(n * 10) / 10;
@@ -1172,6 +1179,8 @@
       g.push({ track: ALL, no: 0, title: '모든 과정 공통', sub: '세 과정 참여자 모두가 봐요', list: items.filter(m => m.track === ALL) });
       return g;
     };
+    const isImg = m => m.kind === 'file' && /^image\//.test(m.mime || '') || /\.(jpe?g|png|webp|gif)$/i.test(m.fname || '');
+    const natSort = list => [...list].sort((a, b) => (a.title || '').localeCompare(b.title || '', 'ko', { numeric: true }));
     const item = m => `<li class="doc"><span class="doc-ic" aria-hidden="true">${docIcon(m)}</span>
         <a class="doc-t" href="${esc(m.url)}" target="_blank" rel="noopener">${esc(m.title)}</a>
         <small class="muted">${m.kind === 'link' ? '링크' : esc((m.fname || '').split('.').pop().toUpperCase())}${m.bytes ? ' · ' + fmtBytes(m.bytes) : ''} · ${fmtTime(m.at)}</small>
@@ -1182,19 +1191,114 @@
         <p class="lead">${staff ? '회차마다 수업 자료(PDF·그림·슬라이드·한글 파일, 50MB까지)나 링크를 올려 주세요. 참여자는 자기 과정 자료와 "모든 과정 공통"을 볼 수 있어요.' : '수업 때 쓴 자료예요. 제목을 누르면 열리거나 내려받아져요.'}</p>
         ${groups().map(gr => `<section class="sess-ph"><div class="row between"><h2 class="h2">${esc(gr.title)} <small>${esc(gr.sub)}, ${gr.list.length}개</small></h2>
           ${staff ? `<span class="row"><button class="btn btn-main btn-small" data-up="${gr.track}:${gr.no}">파일 올리기</button><button class="btn btn-small" data-link="${gr.track}:${gr.no}">링크 더하기</button></span>` : ''}</div>
-          ${gr.list.length ? `<ul class="docs">${gr.list.map(item).join('')}</ul>` : '<p class="muted">아직 자료가 없어요.</p>'}</section>`).join('')}`;
+          ${(() => {
+            const imgs = gr.list.filter(isImg), rest = gr.list.filter(m => !isImg(m));
+            const key = `${gr.track}:${gr.no}`;
+            return `${imgs.length ? `<div class="slides-card"><button class="slides-open" data-slides="${key}" aria-label="${esc(gr.title)} 그림 ${imgs.length}장 슬라이드로 보기">
+                <span class="slides-cover"><img src="${esc(imgs[0].url)}" alt="" loading="lazy"><span class="slides-n">${imgs.length}장</span></span>
+                <span class="slides-t"><b>슬라이드로 보기</b><small>옆으로 넘기며 보기 · 전체화면 · 가로로 돌려도 돼요</small></span></button>
+                ${staff ? `<div class="row wrap"><button class="btn btn-small" data-order="${key}">순서 바꾸기</button><button class="btn btn-small btn-ghost" data-sortname="${key}">이름 순으로 정렬</button><button class="btn btn-small btn-ghost" data-list="${key}">${showList[key] ? '목록 접기' : '목록 펼치기'}</button></div>` : ''}
+                ${staff && showList[key] ? `<ul class="docs">${imgs.map(item).join('')}</ul>` : ''}</div>` : ''}
+              ${rest.length ? `<ul class="docs">${rest.map(item).join('')}</ul>` : ''}
+              ${!gr.list.length ? '<p class="muted">아직 자료가 없어요.</p>' : ''}`;
+          })()}</section>`).join('')}`;
     };
+    const showList = {};
+    const groupImgs = key => { const [t, n] = key.split(':'); return items.filter(m => m.track === t && m.no === +n && isImg(m)); };
+
+    // ----- 슬라이드 보기 -----
+    const openSlides = (key, start = 0) => {
+      const imgs = groupImgs(key); if (!imgs.length) return;
+      const gr = groups().find(g => `${g.track}:${g.no}` === key);
+      let i = Math.min(Math.max(start, 0), imgs.length - 1), zoomed = false;
+      const root = document.createElement('div'); root.className = 'slides'; root.setAttribute('role', 'dialog'); root.setAttribute('aria-label', '슬라이드 보기');
+      root.innerHTML = `<div class="sl-bar"><b>${esc(gr ? gr.title : '')}</b><span class="sl-cnt"></span>
+          <span class="sl-btns"><button class="sl-b" data-sl="full" aria-label="전체화면">⛶</button><button class="sl-b" data-sl="close" aria-label="닫기">✕</button></span></div>
+        <div class="sl-track">${imgs.map((m, k) => `<div class="sl-item" data-k="${k}"><img src="${esc(m.url)}" alt="${esc(m.title)}" loading="${Math.abs(k - i) <= 1 ? 'eager' : 'lazy'}" draggable="false"></div>`).join('')}</div>
+        <button class="sl-nav sl-prev" data-sl="prev" aria-label="이전">‹</button><button class="sl-nav sl-next" data-sl="next" aria-label="다음">›</button>
+        <div class="sl-foot"><span class="sl-title"></span><span class="sl-dots">${imgs.map((_, k) => `<i data-dot="${k}"></i>`).join('')}</span></div>`;
+      document.body.append(root); document.body.classList.add('sl-open');
+      const track = $('.sl-track', root);
+      const show = (k, smooth = true) => {
+        i = Math.min(Math.max(k, 0), imgs.length - 1);
+        track.scrollTo({ left: track.clientWidth * i, behavior: smooth ? 'smooth' : 'instant' });
+        $('.sl-cnt', root).textContent = `${i + 1} / ${imgs.length}`;
+        $('.sl-title', root).textContent = imgs[i].title;
+        $$('[data-dot]', root).forEach((d, k) => d.classList.toggle('on', k === i));
+        $('.sl-prev', root).disabled = i === 0; $('.sl-next', root).disabled = i === imgs.length - 1;
+      };
+      requestAnimationFrame(() => show(i, false));
+      let scrollT; track.onscroll = () => { clearTimeout(scrollT); scrollT = setTimeout(() => { const k = Math.round(track.scrollLeft / track.clientWidth); if (k !== i) show(k, false); }, 80); };
+      const close = () => { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); document.removeEventListener('keydown', onKey); window.removeEventListener('resize', onRz); root.remove(); document.body.classList.remove('sl-open'); };
+      const onKey = e => { if (e.key === 'ArrowLeft') show(i - 1); else if (e.key === 'ArrowRight') show(i + 1); else if (e.key === 'Escape') close(); };
+      const onRz = () => show(i, false);
+      document.addEventListener('keydown', onKey); window.addEventListener('resize', onRz);
+      root.onclick = e => {
+        const b = e.target.closest('[data-sl]');
+        if (b) {
+          if (b.dataset.sl === 'close') close();
+          if (b.dataset.sl === 'prev') show(i - 1);
+          if (b.dataset.sl === 'next') show(i + 1);
+          if (b.dataset.sl === 'full') { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); else (root.requestFullscreen || root.webkitRequestFullscreen || function () { toast('이 브라우저는 전체화면을 지원하지 않아요. 폰을 가로로 돌려 보세요.', true); }).call(root); }
+          return;
+        }
+        const d = e.target.closest('[data-dot]'); if (d) show(+d.dataset.dot);
+      };
+      // 두 번 두드리면 확대/원래대로
+      let lastTap = 0;
+      track.addEventListener('pointerup', e => {
+        const now = Date.now();
+        if (now - lastTap < 320) { zoomed = !zoomed; const im = e.target.closest('.sl-item'); if (im) { im.classList.toggle('zoom', zoomed); if (zoomed) { const r = im.getBoundingClientRect(); im.querySelector('img').style.transformOrigin = `${(e.clientX - r.left) / r.width * 100}% ${(e.clientY - r.top) / r.height * 100}%`; } } }
+        lastTap = now;
+      });
+      root.addEventListener('fullscreenchange', () => show(i, false));
+    };
+
+    // ----- 순서 바꾸기 (관리자) -----
+    const openOrder = key => {
+      let list = groupImgs(key);
+      const gr = groups().find(g => `${g.track}:${g.no}` === key);
+      const d = modal(`<h2>순서 바꾸기 <small class="muted">${esc(gr ? gr.title : '')}</small></h2>
+        <p class="muted">끌어서 놓거나 ▲▼로 옮겨요. 맨 위가 첫 장이에요.</p>
+        <ol class="ord-list" id="ordList"></ol>
+        <div class="row end"><button class="btn btn-ghost" data-close>취소</button><button class="btn btn-main" id="ordSave">저장</button></div>`, 'm-order');
+      const ol = $('#ordList', d);
+      const draw = () => { ol.innerHTML = list.map((m, k) => `<li draggable="true" data-i="${k}"><span class="ord-h" aria-hidden="true">☰</span><img src="${esc(m.url)}" alt="" loading="lazy"><span class="ord-t">${k + 1}. ${esc(m.title)}</span>
+          <span class="ord-btns"><button class="icon-btn" data-mv="-1" data-i="${k}" ${k === 0 ? 'disabled' : ''} aria-label="위로">▲</button><button class="icon-btn" data-mv="1" data-i="${k}" ${k === list.length - 1 ? 'disabled' : ''} aria-label="아래로">▼</button></span></li>`).join(''); };
+      draw();
+      ol.onclick = e => { const b = e.target.closest('[data-mv]'); if (!b) return; const k = +b.dataset.i, j = k + +b.dataset.mv; [list[k], list[j]] = [list[j], list[k]]; draw(); };
+      let from = -1;
+      ol.addEventListener('dragstart', e => { const li = e.target.closest('li'); if (!li) return; from = +li.dataset.i; li.classList.add('drag'); e.dataTransfer.effectAllowed = 'move'; });
+      ol.addEventListener('dragover', e => { e.preventDefault(); const li = e.target.closest('li'); $$('li', ol).forEach(x => x.classList.remove('over')); if (li) li.classList.add('over'); });
+      ol.addEventListener('drop', e => { e.preventDefault(); const li = e.target.closest('li'); if (!li || from < 0) return; const to = +li.dataset.i; const [m] = list.splice(from, 1); list.splice(to, 0, m); from = -1; draw(); });
+      ol.addEventListener('dragend', () => { from = -1; $$('li', ol).forEach(x => x.classList.remove('drag', 'over')); });
+      // 터치 끌기 (폰)
+      let tFrom = -1, tEl = null;
+      ol.addEventListener('pointerdown', e => { const h = e.target.closest('.ord-h'); if (!h || e.pointerType === 'mouse') return; tEl = h.closest('li'); tFrom = +tEl.dataset.i; tEl.classList.add('drag'); tEl.setPointerCapture(e.pointerId); e.preventDefault(); });
+      ol.addEventListener('pointermove', e => { if (tFrom < 0) return; const li = document.elementFromPoint(e.clientX, e.clientY)?.closest('#ordList li'); $$('li', ol).forEach(x => x.classList.remove('over')); if (li) li.classList.add('over'); });
+      ol.addEventListener('pointerup', e => { if (tFrom < 0) return; const li = document.elementFromPoint(e.clientX, e.clientY)?.closest('#ordList li'); if (li) { const to = +li.dataset.i; const [m] = list.splice(tFrom, 1); list.splice(to, 0, m); } tFrom = -1; draw(); });
+      $('#ordSave', d).onclick = async () => { try { await api('material_order', { ids: list.map(m => m.id) }); d.close(); toast('순서를 저장했어요.'); await load(); drawAll(); } catch (err) { toast(err.message, true); } };
+    };
+    const drawAll = () => draw();
     draw();
     v.onclick = async e => {
       const s = e.target.closest('[data-tr]'); if (s) { tr = s.dataset.tr; S.lastTrack = tr; await load(); draw(); return; }
+      const sl = e.target.closest('[data-slides]'); if (sl) { openSlides(sl.dataset.slides); return; }
+      const od = e.target.closest('[data-order]'); if (od) { openOrder(od.dataset.order); return; }
+      const sn = e.target.closest('[data-sortname]');
+      if (sn) { try { await api('material_order', { ids: natSort(groupImgs(sn.dataset.sortname)).map(m => m.id) }); toast('이름 순으로 정렬했어요.'); await load(); draw(); } catch (err) { toast(err.message, true); } return; }
+      const ls = e.target.closest('[data-list]'); if (ls) { showList[ls.dataset.list] = !showList[ls.dataset.list]; draw(); return; }
       const up = e.target.closest('[data-up]');
       if (up) {
         const fs = await pickFiles(true); if (!fs.length) return;
         const [toTr, toNo] = up.dataset.up.split(':'); up.disabled = true; let n = 0;
+        const before = groupImgs(up.dataset.up).map(m => m.id);
         for (const f of fs) {
           up.textContent = `올리는 중… ${n + 1}/${fs.length}`;
           try { const x = await uploadDoc(f); await api('material_add', { track: toTr, no: +toNo, title: f.name.replace(/\.[^.]+$/, ''), kind: 'file', ...x }); n++; } catch (err) { toast(err.message, true); }
         }
+        // 새로 올린 그림은 기존 순서 뒤에 이름 순(1, 2, 3…)으로 붙임
+        if (n) { await load(); const gl = groupImgs(up.dataset.up); const fresh = gl.filter(m => !before.includes(m.id)); await api('material_order', { ids: [...before, ...natSort(fresh).map(m => m.id)] }).catch(() => {}); }
         toast(`${n}개를 올렸어요.`); await load(); draw(); return;
       }
       const lk = e.target.closest('[data-link]');
