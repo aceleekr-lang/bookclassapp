@@ -166,6 +166,7 @@ input[type=color] { height: 44px; width: 80px; border: 2px solid var(--line); bo
 .tplb .l { fill: #A88B67; } .tplb .ld { fill: var(--ink); } .tplb .i { fill: #E3CFAE; } .tplb .i.o { stroke: var(--ink); stroke-width: .6; } .tplb .b { fill: rgba(255,255,255,.9); }
 .tplb .q { font: 700 16px var(--serif); fill: var(--ink); }
 .tplb.on { border-color: var(--tc); box-shadow: inset 0 0 0 2px var(--tc); font-weight: 700; }
+.tpl-desc { margin: .5rem 0 0; padding: .5rem .8rem; background: #FFF6E3; border-left: 4px solid var(--tc, var(--main)); border-radius: 0 8px 8px 0; font-size: .88rem; line-height: 1.6; color: var(--ink); }
 .hintcard { background: #FFF6E3; border-left: 5px solid var(--tc); border-radius: 0 10px 10px 0; padding: .6rem .9rem; }
 .hintcard small { color: var(--sub); font-weight: 600; }
 .hintcard p { margin: .1rem 0 .2rem; font-family: var(--serif); font-size: 1.05rem; }
@@ -389,10 +390,13 @@ td.t-title { max-width: 16em; overflow: hidden; text-overflow: ellipsis; }
 .tt { gap: 7mm; }
 .tt-h { margin: 36mm 0 0; font-size: 22pt; line-height: 1.35; font-weight: 700; flex: none; }
 .tt-rule { width: 16mm; height: .9mm; background: var(--c); flex: none; }
-/* 그림 가득 */
+/* 쪽 끝까지 가득 (도련까지) / 안전영역 안에 가득 */
 .full { position: absolute; inset: calc(-1 * var(--bl, 0mm)); }
 .full .fr { width: 100% !important; height: 100% !important; }
+.fullsafe { position: absolute; inset: 10mm; }
+.fullsafe .fr { width: 100% !important; height: 100% !important; }
 .fcap { position: absolute; left: 16mm; right: 16mm; bottom: 12mm; background: rgba(255,255,255,.88); padding: 2.5mm 4mm; display: flex; }
+.fcap-safe { left: 14mm; right: 14mm; bottom: 14mm; }
 .fcap .flow { max-height: 24mm; }
 .fbox { position: absolute; left: 14mm; right: 14mm; bottom: 16mm; background: rgba(255, 253, 248, .92); padding: 6mm 7mm; display: flex; flex-direction: column; gap: 3mm; border-top: 1.2mm solid var(--c); }
 .fbox .flow { flex: 0 1 auto; max-height: 78mm; }
