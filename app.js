@@ -117,6 +117,23 @@
     return { url: await put(big.b, ''), thumb: await put(small.b, '_s'), w: big.w, h: big.h };
   }
   const uploadImage = async file => ({ ...(await store(await encode(file))), fit: 'cover' });
+  // 교육자료 파일 올리기 (강사·운영자) — 원본 그대로, 50MB까지
+  const DOC_MIME = { pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', mp4: 'video/mp4', mp3: 'audio/mpeg', txt: 'text/plain', html: 'text/html',
+    pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', hwp: 'application/x-hwp', hwpx: 'application/hwp+zip', zip: 'application/zip' };
+  async function uploadDoc(file) {
+    if (file.size > 50 * 1024 * 1024) throw new Error('파일이 50MB를 넘어요. 줄이거나 링크로 올려 주세요.');
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    const mime = file.type || DOC_MIME[ext] || 'application/octet-stream';
+    const { ticket } = await api('ticket', { kind: 'doc' });
+    const safe = file.name.replace(/[^\w.가-힣-]+/g, '_').slice(-80);
+    const path = `t/${ticket}/${Date.now().toString(36)}-${encodeURIComponent(safe)}`;
+    const r = await fetch(`${C.url}/storage/v1/object/bk-docs/${path}`, { method: 'POST', headers: headers({ 'Content-Type': mime, 'x-upsert': 'false' }), body: file });
+    if (!r.ok) throw new Error(`파일을 올리지 못했어요 (${r.status}).`);
+    return { url: `${C.url}/storage/v1/object/public/bk-docs/${path}`, fname: file.name, bytes: file.size, mime };
+  }
+  const fmtBytes = n => !n ? '' : n < 1048576 ? `${Math.round(n / 1024)}KB` : `${(n / 1048576).toFixed(1)}MB`;
+  const docIcon = m => { const mm = (m.mime || '') + ' ' + (m.fname || ''); return m.kind === 'link' ? '🔗' : /pdf/.test(mm) ? '📕' : /image/.test(mm) ? '🖼️' : /video|mp4/.test(mm) ? '🎬' : /audio|mp3/.test(mm) ? '🎧' : /presentation|pptx/.test(mm) ? '📊' : /hwp/.test(mm) ? '📝' : /word|docx/.test(mm) ? '📄' : /zip/.test(mm) ? '🗜️' : '📎'; };
   // 사진 자체를 돌려 새로 저장 (PDF에도 돌린 방향 그대로)
   async function rotateImage(im, turn) {
     let r = null;
@@ -288,6 +305,7 @@
   function tabsFor() {
     const t = [];
     if (!isStaff() || (S.me.tracks || []).length) t.push(['write', '내 책 쓰기'], ['album', '사진첩']);
+    if (isStaff() || (S.me.tracks || []).length) t.push(['docs', '교육자료']);
     if (isStaff()) t.push(['board', '현황판'], ['photos', '회차 사진'], ['book', '책 만들기']);
     if (S.me.role === 'admin') t.push(['people', '참여자']);
     return t;
@@ -1133,6 +1151,73 @@
       if (dl) {
         if (!(await ask('이 사진을 사진첩에서 뺄까요?', '이미 책 쪽에 넣은 사진은 그대로 남아요.', '빼기'))) return;
         try { await api('album_del', { aid: album[+dl.dataset.del].id }); album.splice(+dl.dataset.del, 1); draw(); } catch (err) { toast(err.message, true); }
+      }
+    };
+  };
+
+  // ---------- 교육자료 (참여자는 보기, 강사·운영자는 올리기) ----------
+  VIEWS.docs = async (v, arg) => {
+    const staff = isStaff();
+    const tracks = staff ? [...TRACKS] : (S.me.tracks || []).filter(t => CUR[t]);
+    let tr = tracks.includes(arg.track) ? arg.track : tracks.includes(S.lastTrack) ? S.lastTrack : tracks[0] || ALL;
+    let items = [];
+    const load = async () => { items = (await api('materials', { track: tr })).materials; };
+    await load();
+    const groups = () => {
+      const g = [];
+      if (tr !== ALL) {
+        CUR[tr].sessions.forEach(se => g.push({ track: tr, no: se.no, title: `${se.no}회차 ${se.title}`, sub: se.day, list: items.filter(m => m.track === tr && m.no === se.no) }));
+        g.push({ track: tr, no: 0, title: `${CUR[tr].name} 공통`, sub: '회차와 상관없는 자료', list: items.filter(m => m.track === tr && m.no === 0) });
+      }
+      g.push({ track: ALL, no: 0, title: '모든 과정 공통', sub: '세 과정 참여자 모두가 봐요', list: items.filter(m => m.track === ALL) });
+      return g;
+    };
+    const item = m => `<li class="doc"><span class="doc-ic" aria-hidden="true">${docIcon(m)}</span>
+        <a class="doc-t" href="${esc(m.url)}" target="_blank" rel="noopener">${esc(m.title)}</a>
+        <small class="muted">${m.kind === 'link' ? '링크' : esc((m.fname || '').split('.').pop().toUpperCase())}${m.bytes ? ' · ' + fmtBytes(m.bytes) : ''} · ${fmtTime(m.at)}</small>
+        ${staff ? `<span class="row"><button class="btn btn-small btn-ghost" data-ren="${m.id}">이름 바꾸기</button><button class="btn btn-small btn-ghost btn-danger" data-del="${m.id}">지우기</button></span>` : ''}</li>`;
+    const draw = () => {
+      v.innerHTML = `<h1 class="h">교육자료</h1>
+        ${tracks.length > 1 || staff ? `<div class="spines" role="group" aria-label="과정 고르기">${tracks.map(t => spine(t, t === tr)).join('')}${staff ? allSpine(tr === ALL) : ''}</div>` : ''}
+        <p class="lead">${staff ? '회차마다 수업 자료(PDF·그림·슬라이드·한글 파일, 50MB까지)나 링크를 올려 주세요. 참여자는 자기 과정 자료와 "모든 과정 공통"을 볼 수 있어요.' : '수업 때 쓴 자료예요. 제목을 누르면 열리거나 내려받아져요.'}</p>
+        ${groups().map(gr => `<section class="sess-ph"><div class="row between"><h2 class="h2">${esc(gr.title)} <small>${esc(gr.sub)}, ${gr.list.length}개</small></h2>
+          ${staff ? `<span class="row"><button class="btn btn-main btn-small" data-up="${gr.track}:${gr.no}">파일 올리기</button><button class="btn btn-small" data-link="${gr.track}:${gr.no}">링크 더하기</button></span>` : ''}</div>
+          ${gr.list.length ? `<ul class="docs">${gr.list.map(item).join('')}</ul>` : '<p class="muted">아직 자료가 없어요.</p>'}</section>`).join('')}`;
+    };
+    draw();
+    v.onclick = async e => {
+      const s = e.target.closest('[data-tr]'); if (s) { tr = s.dataset.tr; S.lastTrack = tr; await load(); draw(); return; }
+      const up = e.target.closest('[data-up]');
+      if (up) {
+        const fs = await pickFiles(true); if (!fs.length) return;
+        const [toTr, toNo] = up.dataset.up.split(':'); up.disabled = true; let n = 0;
+        for (const f of fs) {
+          up.textContent = `올리는 중… ${n + 1}/${fs.length}`;
+          try { const x = await uploadDoc(f); await api('material_add', { track: toTr, no: +toNo, title: f.name.replace(/\.[^.]+$/, ''), kind: 'file', ...x }); n++; } catch (err) { toast(err.message, true); }
+        }
+        toast(`${n}개를 올렸어요.`); await load(); draw(); return;
+      }
+      const lk = e.target.closest('[data-link]');
+      if (lk) {
+        const [toTr, toNo] = lk.dataset.link.split(':');
+        const d = modal(`<h2>링크 더하기</h2><form id="lkf" class="stack"><label class="f">제목<input id="lkT" required placeholder="예) 2회차 슬라이드"></label><label class="f">주소<input id="lkU" type="url" required placeholder="https://…"></label>
+          <div class="row end"><button type="button" class="btn btn-ghost" data-close>취소</button><button class="btn btn-main">더하기</button></div></form>`);
+        $('#lkf', d).onsubmit = async ev => { ev.preventDefault(); try { await api('material_add', { track: toTr, no: +toNo, title: $('#lkT', d).value, kind: 'link', url: $('#lkU', d).value }); d.close(); await load(); draw(); } catch (err) { toast(err.message, true); } };
+        return;
+      }
+      const rn = e.target.closest('[data-ren]');
+      if (rn) {
+        const m = items.find(x => x.id === rn.dataset.ren);
+        const d = modal(`<h2>이름 바꾸기</h2><form id="rnf" class="stack"><label class="f">제목<input id="rnT" value="${esc(m.title)}" required></label>
+          <div class="row end"><button type="button" class="btn btn-ghost" data-close>취소</button><button class="btn btn-main">저장</button></div></form>`);
+        $('#rnf', d).onsubmit = async ev => { ev.preventDefault(); try { await api('material_set', { mid: m.id, title: $('#rnT', d).value }); d.close(); await load(); draw(); } catch (err) { toast(err.message, true); } };
+        return;
+      }
+      const dl = e.target.closest('[data-del]');
+      if (dl) {
+        const m = items.find(x => x.id === dl.dataset.del);
+        if (!(await ask(`「${m.title}」을 지울까요?`, '목록에서 빠져요. 파일 자체는 저장소에 남아요.', '지우기'))) return;
+        try { await api('material_del', { mid: m.id }); await load(); draw(); } catch (err) { toast(err.message, true); }
       }
     };
   };

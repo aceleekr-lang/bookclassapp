@@ -198,6 +198,12 @@ input[type=color] { height: 44px; width: 80px; border: 2px solid var(--line); bo
 .tile-btns { display: flex; gap: .3rem; padding: .4rem; flex-wrap: wrap; align-items: center; }
 .tile-btns .icon-btn { width: 40px; height: 40px; font-size: 1.1rem; }
 .tile-btns .mv { width: 100%; min-height: 38px; padding: 0 .4rem; font-size: .8rem; border-radius: 8px; }
+/* 교육자료 */
+.docs { list-style: none; margin: 0; padding: 0; display: grid; gap: .4rem; }
+.doc { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; background: var(--card); border: 1.5px solid var(--line); border-radius: 10px; padding: .55rem .8rem; }
+.doc-ic { font-size: 1.3rem; }
+.doc-t { font-weight: 600; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; min-height: 32px; display: inline-flex; align-items: center; }
+.doc > .row { margin-left: auto; }
 .taken { margin: .4rem; padding: .55rem 0; text-align: center; font-weight: 700; font-size: .85rem; color: var(--town); background: #E0F1EA; border-radius: 10px; }
 .big-photo { max-width: 100%; max-height: 75vh; display: block; margin: 0 auto 1rem; border-radius: 8px; }
 .m-photo { width: min(920px, calc(100vw - 1.5rem)); }
